@@ -481,35 +481,43 @@ HRESULT internal_recorder::BeginRecording(std::wstring path, IStream *stream) {
 					}
 					if (m_IsRecording) {
 						if (m_RecorderMode == MODE_VIDEO || m_RecorderMode == MODE_SLIDESHOW) {
-							//FrameWriteModel *model = new FrameWriteModel();
-							//model->Frame = pFrameCopy;
-							//model->Duration = durationSinceLastFrame100Nanos;
-							//model->StartPos = lastFrameStartPos;
+							//FrameWriteModel model;
+							//model.Frame = pFrameCopy;
+							//model.Duration = durationSinceLastFrame100Nanos;
+							//model.StartPos = lastFrameStartPos;
 							//if (recordAudio) {
-							//	model->Audio = audioData;
+							//	model.Audio = audioData;
 							//}
-							//model->FrameNumber = frameNr;
+							//model.FrameNumber = frameNr;
+							//hr = WriteFrame(model);
+							//if (FAILED(hr)) {
+							//	pDeskDupl->ReleaseFrame();
+							//	SafeRelease(&pDesktopResource);
+							//	return hr;
+							//}
 							//EnqueueFrame(model);
-							hr = WriteFrameToVideo(lastFrameStartPos, durationSinceLastFrame100Nanos, m_VideoStreamIndex, pFrameCopy);
-							
 
-							if (m_IsAudioEnabled && audioData.size() == 0) {
-								int frameCount = ceil(m_InputAudioSamplesPerSecond * ((double)durationSinceLastFrame100Nanos / 10 / 1000 / 1000));
-								LONGLONG byteCount = frameCount * (AUDIO_BITS_PER_SAMPLE / 8)*m_AudioChannels;
-								audioData.insert(audioData.end(), byteCount, 0);
-								LOG(L"Inserted %zd bytes of silence", audioData.size());
-							}
-							if (audioData.size() > 0) {
-								byte* data = new BYTE[audioData.size()];
-								std::copy(audioData.begin(), audioData.end(), data);
-								hr = WriteAudioSamplesToVideo(lastFrameStartPos, durationSinceLastFrame100Nanos, m_AudioStreamIndex, data, audioData.size());
-								if (FAILED(hr)) {
-									ERR(L"Writing of audio sample with start pos %ll ms failed\n", (lastFrameStartPos / 10 / 1000));
-								}
-								delete[] data;
-								audioData.clear();
-								vector<BYTE>().swap(audioData);
-							}
+
+							hr = WriteFrameToVideo(lastFrameStartPos, durationSinceLastFrame100Nanos, m_VideoStreamIndex, pFrameCopy);
+
+
+							//if (m_IsAudioEnabled && audioData.size() == 0) {
+							//	int frameCount = ceil(m_InputAudioSamplesPerSecond * ((double)durationSinceLastFrame100Nanos / 10 / 1000 / 1000));
+							//	LONGLONG byteCount = frameCount * (AUDIO_BITS_PER_SAMPLE / 8)*m_AudioChannels;
+							//	audioData.insert(audioData.end(), byteCount, 0);
+							//	LOG(L"Inserted %zd bytes of silence", audioData.size());
+							//}
+							//if (audioData.size() > 0) {
+							//	byte* data = new BYTE[audioData.size()];
+							//	std::copy(audioData.begin(), audioData.end(), data);
+							//	hr = WriteAudioSamplesToVideo(lastFrameStartPos, durationSinceLastFrame100Nanos, m_AudioStreamIndex, data, audioData.size());
+							//	if (FAILED(hr)) {
+							//		ERR(L"Writing of audio sample with start pos %ll ms failed\n", (lastFrameStartPos / 10 / 1000));
+							//	}
+							//	delete[] data;
+							//	audioData.clear();
+							//	vector<BYTE>().swap(audioData);
+							//}
 
 
 							frameNr++;
@@ -874,29 +882,29 @@ HRESULT internal_recorder::InitializeVideoSinkWriter(std::wstring path, IMFByteS
 		RETURN_ON_BAD_HR(pSinkWriter->SetInputMediaType(audioStreamIndex, pAudioMediaTypeIn, NULL));
 		pAudioMediaTypeIn.Release();
 	}
-	//if (destWidth != sourceWidth || destHeight != sourceHeight) {
-	//	GUID transformType;
-	//	DWORD transformIndex = 0;
-	//	CComPtr<IMFVideoProcessorControl> videoProcessor;
-	//	CComPtr<IMFSinkWriterEx>      pSinkWriterEx = NULL;
-	//	RETURN_ON_BAD_HR(pSinkWriter->QueryInterface(&pSinkWriterEx));
-	//	while (true) {
-	//		CComPtr<IMFTransform> transform;
-	//		const HRESULT hr = pSinkWriterEx->GetTransformForStream(videoStreamIndex, transformIndex, &transformType, &transform);
-	//		RETURN_ON_BAD_HR(hr);
-	//		if (transformType == MFT_CATEGORY_VIDEO_PROCESSOR) {
-	//			RETURN_ON_BAD_HR(transform->QueryInterface(&videoProcessor));
-	//			break;
-	//		}
+	if (destWidth != sourceWidth || destHeight != sourceHeight) {
+		GUID transformType;
+		DWORD transformIndex = 0;
+		CComPtr<IMFVideoProcessorControl> videoProcessor;
+		CComPtr<IMFSinkWriterEx>      pSinkWriterEx = NULL;
+		RETURN_ON_BAD_HR(pSinkWriter->QueryInterface(&pSinkWriterEx));
+		while (true) {
+			CComPtr<IMFTransform> transform;
+			const HRESULT hr = pSinkWriterEx->GetTransformForStream(videoStreamIndex, transformIndex, &transformType, &transform);
+			RETURN_ON_BAD_HR(hr);
+			if (transformType == MFT_CATEGORY_VIDEO_PROCESSOR) {
+				RETURN_ON_BAD_HR(transform->QueryInterface(&videoProcessor));
+				break;
+			}
 
-	//		transformIndex++;
-	//	}
-	//	SIZE constrictionSize;
-	//	constrictionSize.cx = sourceWidth;
-	//	constrictionSize.cy = sourceHeight;
-	//	videoProcessor->SetSourceRectangle(&destRect);
-	//	videoProcessor->SetConstrictionSize(NULL);
-	//}
+			transformIndex++;
+		}
+		SIZE constrictionSize;
+		constrictionSize.cx = sourceWidth;
+		constrictionSize.cy = sourceHeight;
+		videoProcessor->SetSourceRectangle(&destRect);
+		videoProcessor->SetConstrictionSize(NULL);
+	}
 
 
 
@@ -909,6 +917,60 @@ HRESULT internal_recorder::InitializeVideoSinkWriter(std::wstring path, IMFByteS
 	*pVideoStreamIndex = videoStreamIndex;
 	*pAudioStreamIndex = audioStreamIndex;
 	return S_OK;
+}
+
+
+
+HRESULT internal_recorder::WriteFrame(FrameWriteModel model) {
+	HRESULT hr(S_OK);
+	if (m_RecorderMode == MODE_VIDEO) {
+		hr = WriteFrameToVideo(model.StartPos, model.Duration, m_VideoStreamIndex, model.Frame);
+		if (FAILED(hr)) {
+			ERR(L"Writing of video frame with start pos %lld ms failed\n", (model.StartPos / 10 / 1000));
+			m_IsRecording = false; //Stop recording if we fail
+			return hr;
+
+		}
+	}
+	else if (m_RecorderMode == MODE_SLIDESHOW) {
+		wstring	path = m_OutputFolder + L"\\" + to_wstring(model.FrameNumber) + L".png";
+		hr = WriteFrameToImage(model.Frame, path.c_str());
+		LONGLONG startposMs = (model.StartPos / 10 / 1000);
+		LONGLONG durationMs = (model.Duration / 10 / 1000);
+		if (FAILED(hr)) {
+			ERR(L"Writing of video frame with start pos %lld ms failed\n", startposMs);
+			m_IsRecording = false; //Stop recording if we fail
+			return hr;
+		}
+		else {
+
+			m_FrameDelays.insert(std::pair<wstring, int>(path, model.FrameNumber == 0 ? 0 : durationMs));
+			ERR(L"Wrote video slideshow frame with start pos %lld ms and with duration %lld ms\n", startposMs, durationMs);
+		}
+	}
+	model.Frame.Release();
+	BYTE *data;
+	//If the audio capture returns no data, i.e. the source is silent, we need to pad the PCM stream with zeros to give the media sink silence as input.
+	//If we don't, the sink writer will begin throttling video frames because it expects audio samples to be delivered, and think they are delayed.
+	if (m_IsAudioEnabled && model.Audio.size() == 0) {
+		int frameCount = ceil(m_InputAudioSamplesPerSecond * ((double)model.Duration / 10 / 1000 / 1000));
+		LONGLONG byteCount = frameCount * (AUDIO_BITS_PER_SAMPLE / 8)*m_AudioChannels;
+		model.Audio.insert(model.Audio.end(), byteCount, 0);
+		LOG(L"Inserted %zd bytes of silence", model.Audio.size());
+	}
+	if (model.Audio.size() > 0) {
+		data = new BYTE[model.Audio.size()];
+		std::copy(model.Audio.begin(), model.Audio.end(), data);
+		hr = WriteAudioSamplesToVideo(model.StartPos, model.Duration, m_AudioStreamIndex, data, model.Audio.size());
+		if (FAILED(hr)) {
+			ERR(L"Writing of audio sample with start pos %ll ms failed\n", (model.StartPos / 10 / 1000));
+			return hr;
+		}
+		delete[] data;
+		model.Audio.clear();
+		vector<BYTE>().swap(model.Audio);
+	}
+	return hr;
 }
 
 void internal_recorder::EnqueueFrame(FrameWriteModel *model) {
