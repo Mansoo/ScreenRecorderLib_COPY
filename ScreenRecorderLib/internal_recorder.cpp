@@ -481,15 +481,37 @@ HRESULT internal_recorder::BeginRecording(std::wstring path, IStream *stream) {
 					}
 					if (m_IsRecording) {
 						if (m_RecorderMode == MODE_VIDEO || m_RecorderMode == MODE_SLIDESHOW) {
-							FrameWriteModel *model = new FrameWriteModel();
-							model->Frame = pFrameCopy;
-							model->Duration = durationSinceLastFrame100Nanos;
-							model->StartPos = lastFrameStartPos;
-							if (recordAudio) {
-								model->Audio = audioData;
+							//FrameWriteModel *model = new FrameWriteModel();
+							//model->Frame = pFrameCopy;
+							//model->Duration = durationSinceLastFrame100Nanos;
+							//model->StartPos = lastFrameStartPos;
+							//if (recordAudio) {
+							//	model->Audio = audioData;
+							//}
+							//model->FrameNumber = frameNr;
+							//EnqueueFrame(model);
+							hr = WriteFrameToVideo(lastFrameStartPos, durationSinceLastFrame100Nanos, m_VideoStreamIndex, pFrameCopy);
+							
+
+							if (m_IsAudioEnabled && audioData.size() == 0) {
+								int frameCount = ceil(m_InputAudioSamplesPerSecond * ((double)durationSinceLastFrame100Nanos / 10 / 1000 / 1000));
+								LONGLONG byteCount = frameCount * (AUDIO_BITS_PER_SAMPLE / 8)*m_AudioChannels;
+								audioData.insert(audioData.end(), byteCount, 0);
+								LOG(L"Inserted %zd bytes of silence", audioData.size());
 							}
-							model->FrameNumber = frameNr;
-							EnqueueFrame(model);
+							if (audioData.size() > 0) {
+								byte* data = new BYTE[audioData.size()];
+								std::copy(audioData.begin(), audioData.end(), data);
+								hr = WriteAudioSamplesToVideo(lastFrameStartPos, durationSinceLastFrame100Nanos, m_AudioStreamIndex, data, audioData.size());
+								if (FAILED(hr)) {
+									ERR(L"Writing of audio sample with start pos %ll ms failed\n", (lastFrameStartPos / 10 / 1000));
+								}
+								delete[] data;
+								audioData.clear();
+								vector<BYTE>().swap(audioData);
+							}
+
+
 							frameNr++;
 						}
 						else if (m_RecorderMode == MODE_SNAPSHOT) {
@@ -852,29 +874,32 @@ HRESULT internal_recorder::InitializeVideoSinkWriter(std::wstring path, IMFByteS
 		RETURN_ON_BAD_HR(pSinkWriter->SetInputMediaType(audioStreamIndex, pAudioMediaTypeIn, NULL));
 		pAudioMediaTypeIn.Release();
 	}
-	if (destWidth != sourceWidth || destHeight != sourceHeight) {
-		GUID transformType;
-		DWORD transformIndex = 0;
-		CComPtr<IMFVideoProcessorControl> videoProcessor;
-		CComPtr<IMFSinkWriterEx>      pSinkWriterEx = NULL;
-		RETURN_ON_BAD_HR(pSinkWriter->QueryInterface(&pSinkWriterEx));
-		while (true) {
-			CComPtr<IMFTransform> transform;
-			const HRESULT hr = pSinkWriterEx->GetTransformForStream(videoStreamIndex, transformIndex, &transformType, &transform);
-			RETURN_ON_BAD_HR(hr);
-			if (transformType == MFT_CATEGORY_VIDEO_PROCESSOR) {
-				RETURN_ON_BAD_HR(transform->QueryInterface(&videoProcessor));
-				break;
-			}
+	//if (destWidth != sourceWidth || destHeight != sourceHeight) {
+	//	GUID transformType;
+	//	DWORD transformIndex = 0;
+	//	CComPtr<IMFVideoProcessorControl> videoProcessor;
+	//	CComPtr<IMFSinkWriterEx>      pSinkWriterEx = NULL;
+	//	RETURN_ON_BAD_HR(pSinkWriter->QueryInterface(&pSinkWriterEx));
+	//	while (true) {
+	//		CComPtr<IMFTransform> transform;
+	//		const HRESULT hr = pSinkWriterEx->GetTransformForStream(videoStreamIndex, transformIndex, &transformType, &transform);
+	//		RETURN_ON_BAD_HR(hr);
+	//		if (transformType == MFT_CATEGORY_VIDEO_PROCESSOR) {
+	//			RETURN_ON_BAD_HR(transform->QueryInterface(&videoProcessor));
+	//			break;
+	//		}
 
-			transformIndex++;
-		}
-		SIZE constrictionSize;
-		constrictionSize.cx = sourceWidth;
-		constrictionSize.cy = sourceHeight;
-		videoProcessor->SetSourceRectangle(&destRect);
-		videoProcessor->SetConstrictionSize(NULL);
-	}
+	//		transformIndex++;
+	//	}
+	//	SIZE constrictionSize;
+	//	constrictionSize.cx = sourceWidth;
+	//	constrictionSize.cy = sourceHeight;
+	//	videoProcessor->SetSourceRectangle(&destRect);
+	//	videoProcessor->SetConstrictionSize(NULL);
+	//}
+
+
+
 	// Tell the sink writer to start accepting data.
 	RETURN_ON_BAD_HR(pSinkWriter->BeginWriting());
 
