@@ -78,16 +78,18 @@ private:
 	const GUID   VIDEO_INPUT_FORMAT = MFVideoFormat_ARGB32;
 	const GUID   IMAGE_ENCODER_FORMAT = GUID_ContainerFormatPng;
 
-
-
 #if _DEBUG 
 	ATL::CComPtr<ID3D11Debug> m_Debug;
 #endif
+	// forward declaration to a nested type
+	struct ThreadWrapper;
+	std::unique_ptr<ThreadWrapper> m_ThreadWrapperIml;
 	ATL::CComPtr<ID3D11DeviceContext> pImmediateContext;
 	ATL::CComPtr<IMFSinkWriter> m_SinkWriter;
 	std::queue<FrameWriteModel*> m_WriteQueue;
 	std::chrono::high_resolution_clock::time_point m_LastFrame;
 	bool m_IsDestructed;
+	UINT32 m_SkippedFrames;
 	UINT32 m_RecorderMode;
 	DWORD m_VideoStreamIndex;
 	DWORD m_AudioStreamIndex;
@@ -111,12 +113,15 @@ private:
 	bool m_IsHardwareEncodingEnabled = true;
 	bool m_IsPaused = false;
 	bool m_IsRecording = false;
+	bool m_IsEncoderThreadRunning = false;
 	HRESULT BeginRecording(std::wstring path, IStream *stream);
 	std::string NowToString();
 	HRESULT ConfigureOutputDir(std::wstring path);
 	void SetDebugName(ID3D11DeviceChild* child, const std::string& name);
 	void SetViewPort(ID3D11DeviceContext *deviceContext, UINT Width, UINT Height);
 	void EnqueueFrame(FrameWriteModel *model);
+	void ProcessFrameQueue();
+
 	HRESULT InitializeDx(ID3D11DeviceContext **ppContext, ID3D11Device **ppDevice, IDXGIOutputDuplication **ppDesktopDupl, DXGI_OUTDUPL_DESC *pOutputDuplDesc);
 	HRESULT InitializeDesktopDupl(ID3D11Device *pDevice, IDXGIOutputDuplication **ppDesktopDupl, DXGI_OUTDUPL_DESC *pOutputDuplDesc);
 	HRESULT InitializeVideoSinkWriter(std::wstring path, IMFByteStream *outStream, ID3D11Device* pDevice, RECT sourceRect, RECT destRect, IMFSinkWriter **ppWriter, DWORD *pVideoStreamIndex, DWORD *pAudioStreamIndex);

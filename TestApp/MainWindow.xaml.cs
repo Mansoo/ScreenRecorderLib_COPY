@@ -30,7 +30,7 @@ namespace TestApp
         }
 
         public int VideoBitrate { get; set; } = 7000;
-        public int VideoFramerate { get; set; } = 30;
+        public int VideoFramerate { get; set; } = 60;
         public bool IsAudioEnabled { get; set; } = true;
         public bool IsMousePointerEnabled { get; set; } = true;
         public bool IsFixedFramerate { get; set; } = false;

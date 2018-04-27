@@ -1,5 +1,15 @@
 // cleanup.h
 #include <audioclient.h>
+#include <dxgi1_2.h>
+template <class T> void SafeRelease(T **ppT)
+{
+	if (*ppT)
+	{
+		(*ppT)->Release();
+		*ppT = NULL;
+	}
+}
+
 class AudioClientStopOnExit {
 public:
 	AudioClientStopOnExit(IAudioClient *p) : m_p(p) {}
@@ -87,11 +97,22 @@ class ReleaseOnExit {
 public:
 	ReleaseOnExit(IUnknown *p) : m_p(p) {}
 	~ReleaseOnExit() {
-		m_p->Release();
+		SafeRelease(&m_p);
+		//m_p->Release();
 	}
 
 private:
 	IUnknown *m_p;
+};
+
+class ReleaseFrameOnExit {
+public:
+	ReleaseFrameOnExit(IDXGIOutputDuplication *p) : m_p(p) {}
+	~ReleaseFrameOnExit() {
+		m_p->ReleaseFrame();
+	}
+private:
+	IDXGIOutputDuplication *m_p;
 };
 
 class SetEventOnExit {
